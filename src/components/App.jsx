@@ -1,90 +1,78 @@
-import { Component } from 'react';
+import { useState, useEffect, useCallback } from 'react';
 import Searchbar from './Searchbar/Searchbar';
 import ImageGallery from './ImageGallery/ImageGallery';
 import Button from './Button/Button';
 import Modal from './Modal/Modal';
+import Loader from './Loader/Loader';
 
 import getData from 'api/servises';
 
 import css from './app.module.css';
-import Loader from './Loader/Loader';
 
-class App extends Component {
-  state = {
-    searchInput: '',
-    loading: false,
-    error: null,
-    hits: [],
-    currentPage: 1,
-    totalPages: 1,
-    perPage: 12,
-    showModal: false,
-    filter: [],
-  };
+const perPage = 12;
 
-  async componentDidUpdate(prevProps, prevState) {
-    const { searchInput, currentPage, perPage, hits } = this.state;
-    if (
-      prevState.searchInput !== searchInput ||
-      prevState.currentPage !== currentPage
-    ) {
-      this.setState({ loading: true });
+export default function App() {
+  const [searchInput, setSearchInput] = useState('');
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState(null);
+  const [hits, setHits] = useState([]);
+  const [currentPage, setCurrentPage] = useState(1);
+  const [totalPages, setTotalPages] = useState(1);
+  const [showModal, setShowModal] = useState(false);
+  const [filter, setFilter] = useState([]);
+
+  useEffect(() => {
+    const fetchImages = async () => {
       try {
-        const data = await getData(
-          searchInput,
-          currentPage,
-          perPage
-        );
-        this.setState({
-          hits: [...hits, ...data.hits],
-          totalPages: Math.ceil(data.totalHits / perPage),
-        });
+        setLoading(true);
+        const data = await getData(searchInput, currentPage, perPage);
+        setHits(prevState => [...prevState, ...data.hits]);
+        setTotalPages(Math.ceil(data.totalHits / perPage));
       } catch (error) {
-        this.setState({ error: error.message });
+        setError(error.message);
       } finally {
-        this.setState({ loading: false });
+        setLoading(false);
       }
+    };
+    if (searchInput) {
+      fetchImages();
     }
-  }
+  }, [currentPage, searchInput]);
 
-  onHandleSubmit = ({ searchInput }) => {
-    if (
-      (this.state.searchInput !== searchInput) 
-    ) {
-      this.setState({ hits: [], searchInput: searchInput, currentPage: 1 });
-    }
+  const onHandleSubmit = inputValue => {
+    setSearchInput(inputValue);
+    setHits([]);
+    setCurrentPage(1);
   };
 
-  onHandleIncrease = () => {
-    this.setState(({ currentPage }) => ({ currentPage: currentPage + 1 }));
-  };
+  const onHandleIncrease = useCallback(() => {
+    setCurrentPage(prevState => prevState + 1);
+  }, []);
 
-  onHandleClick = event => {
-    const picId = Number(event.target.id);
-    const filter = this.state.hits.filter(hit => hit.id === picId);
-    this.setState({ filter: filter });
-    this.toggleModal();
-  };
+  const toggleModal = useCallback(() => {
+    setShowModal(prevState => !prevState);
+  }, []);
 
-  toggleModal = () => {
-    this.setState(({ showModal }) => ({ showModal: !showModal }));
-  };
+  const onHandleClick = useCallback(
+    event => {
+      const picId = Number(event.target.id);
+      const filter = hits.filter(hit => hit.id === picId);
+      setFilter(filter);
+      toggleModal();
+    },
+    [hits, toggleModal]
+  );
 
-  render() {
-    const { hits, totalPages, currentPage, loading, showModal, filter } =
-      this.state;
-    return (
-      <div className={css.app}>
-        <Searchbar onSubmit={this.onHandleSubmit} />
-        {hits.length !== 0 && (
-          <ImageGallery items={hits} onClick={this.onHandleClick} />
-        )}
-        {totalPages > currentPage && <Button onClick={this.onHandleIncrease} />}
-        {loading && <Loader />}
-        {showModal && <Modal onClose={this.toggleModal} filter={filter} />}
-      </div>
-    );
-  }
+  return (
+    <div className={css.app}>
+      <Searchbar onSubmit={onHandleSubmit} />
+      {hits.length !== 0 && (
+        <ImageGallery items={hits} onClick={onHandleClick} />
+      )}
+      {error && <div>{error.message}</div>}
+      {totalPages > currentPage && <Button onClick={onHandleIncrease} />}
+      {loading && <Loader />}
+      {showModal && <Modal onClose={toggleModal} filter={filter} />}
+    </div>
+  );
 }
-
-export default App;
